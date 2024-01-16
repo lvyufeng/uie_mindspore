@@ -1,14 +1,15 @@
 import re
 import numpy as np
 
+import time
 
 import math
 import argparse
 import mindspore
-from mindnlp.transformers import UIE, UIEM
 
 from tokenizer import ErnieMTokenizerFast
 from utils import logger, get_bool_ids_greater_than, get_span, get_id_and_prob, cut_chinese_sent, dbc2sbc
+
 
 class MindSporeInferBackend:
     def __init__(self,
@@ -16,6 +17,7 @@ class MindSporeInferBackend:
                  multilingual=False,
                  use_fp16=False):
         logger.info(">>> [MindSporeInferBackend] Creating Engine ...")
+        self.multilingual = multilingual
         if multilingual:
             self.model = UIEM.from_pretrained(model_path_prefix)
         else:
@@ -152,7 +154,6 @@ class UIEPredictor(object):
                 result_list = []
             else:
                 result_list = self._single_stage_predict(examples)
-
             if not node.parent_relations:
                 relations = [[] for i in range(len(datas))]
                 for k, v in input_map.items():
@@ -323,6 +324,7 @@ class UIEPredictor(object):
             padding_type = "max_length"
         else:
             padding_type = "longest"
+
         encoded_inputs = self._tokenizer(
             text=short_texts_prompts,
             text_pair=short_input_texts,
@@ -345,13 +347,10 @@ class UIEPredictor(object):
             if self._multilingual:
                 input_ids = np.array(
                     input_ids, dtype="int64")
-                attention_mask = np.array(
-                    attention_mask, dtype="int64")
                 position_ids = (np.cumsum(np.ones_like(input_ids), axis=1)
                                 - np.ones_like(input_ids))*attention_mask
                 input_dict = {
                     "input_ids": input_ids,
-                    "attention_mask": attention_mask,
                     "position_ids": position_ids
                 }
             else:
@@ -546,16 +545,41 @@ def parse_args():
         default="mindspore",
         help="Select which engine to run model, defaults to pytorch."
     )
+    parser.add_argument(
+        "-g",
+        "--graph",
+        action='store_true',
+        help="Whether use graph mode."
+    )
     args = parser.parse_args()
     return args
 
 
 if __name__ == '__main__':
     args = parse_args()
-    # args.schema = ['航母']
-    args.schema = ['Time', 'Player', 'Competition', 'Score']
+    args.schema = ['航母']
+    # args.schema = ['Time', 'Player', 'Competition', 'Score']
     args.schema_lang = "en"
+    if args.graph:
+        mindspore.set_context(mode=mindspore.GRAPH_MODE, jit_syntax_level=mindspore.STRICT,
+                              enable_graph_kernel=True, graph_kernel_flags="--opt_level=2")
+        from mindnlp.transformers import MSUIE as UIE
+        from mindnlp.transformers import MSUIEM as UIEM
+    else:
+        from mindnlp.transformers import UIE, UIEM
+    batch_size = 512
     uie = UIEPredictor(model=args.model, task_path=args.task_path, schema_lang=args.schema_lang, schema=args.schema, engine=args.engine,
-                       position_prob=args.position_prob, max_seq_len=args.max_seq_len, batch_size=64, split_sentence=False, use_fp16=args.use_fp16)
-    # print(uie("印媒所称的“印度第一艘国产航母”—“维克兰特”号"))
-    print(uie(["2月8日上午北京冬奥会自由式滑雪女子大跳台决赛中中国选手谷爱凌以188.25分获得金牌！", "Rafael Nadal wins French Open Final!"]))
+                       position_prob=args.position_prob, max_seq_len=args.max_seq_len, batch_size=batch_size, split_sentence=False, use_fp16=args.use_fp16)
+    text = ["印媒所称的“印度第一艘国产航母”—“维克兰特”号"] * batch_size
+    # text = ["2月8日上午北京冬奥会自由式滑雪女子大跳台决赛中中国选手谷爱凌以188.25分获得金牌！", "Rafael Nadal wins French Open Final!"] * (batch_size // 2)
+    time_list = []
+    for i in range(32):
+        s = time.time()
+        res = uie(text)
+        t = time.time()
+        if i > 1:
+            time_list.append(t - s)
+    print(sum(time_list) / len(time_list))
+    print(time_list)
+    # print(uie(["2月8日上午北京冬奥会自由式滑雪女子大跳台决赛中中国选手谷爱凌以188.25分获得金牌！", "Rafael Nadal wins French Open Final!"]))
+    # profiler.analyse()
