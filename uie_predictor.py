@@ -567,7 +567,7 @@ if __name__ == '__main__':
         from mindnlp.transformers import MSUIEM as UIEM
     else:
         from mindnlp.transformers import UIE, UIEM
-    batch_size = 512
+    batch_size = 1
     uie = UIEPredictor(model=args.model, task_path=args.task_path, schema_lang=args.schema_lang, schema=args.schema, engine=args.engine,
                        position_prob=args.position_prob, max_seq_len=args.max_seq_len, batch_size=batch_size, split_sentence=False, use_fp16=args.use_fp16)
     text = ["印媒所称的“印度第一艘国产航母”—“维克兰特”号"] * batch_size
@@ -579,6 +579,7 @@ if __name__ == '__main__':
         t = time.time()
         if i > 1:
             time_list.append(t - s)
+    print(res)
     print(sum(time_list) / len(time_list))
     print(time_list)
     # print(uie(["2月8日上午北京冬奥会自由式滑雪女子大跳台决赛中中国选手谷爱凌以188.25分获得金牌！", "Rafael Nadal wins French Open Final!"]))

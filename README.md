@@ -75,6 +75,14 @@ UIE不限定行业领域和抽取目标，以下是一些零样本行业示例�
 pip install -r requirements.txt
 ```
 
+简单测试：
+
+```bash
+python uie_predictor.py -m lvyufeng/uie-base --use_fp16 -g
+# -m: model
+# -g: graph mode
+```
+
 <a name="实体抽取"></a>
 
 #### 3.1 实体抽取
@@ -94,7 +102,7 @@ pip install -r requirements.txt
   >>> from pprint import pprint
 
   >>> schema = ['时间', '选手', '赛事名称'] # Define the schema for entity extraction
-  >>> ie = UIEPredictor(model='uie-base', schema=schema)
+  >>> ie = UIEPredictor(model='lvyufeng/uie-base', schema=schema)
   >>> pprint(ie("2月8日上午北京冬奥会自由式滑雪女子大跳台决赛中中国选手谷爱凌以188.25分获得金牌！")) # Better print results using pprint
   [{'时间': [{'end': 6,
             'probability': 0.9857378532924486,
