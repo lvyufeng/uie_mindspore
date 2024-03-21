@@ -6,6 +6,10 @@ import time
 import math
 import argparse
 import mindspore
+mindspore.set_context(mode=mindspore.GRAPH_MODE, jit_syntax_level=mindspore.STRICT,
+                        enable_graph_kernel=True, graph_kernel_flags="--opt_level=2", max_device_memory="4GB")
+from mindnlp.transformers import MSUIE as UIE
+from mindnlp.transformers import MSUIEM as UIEM
 
 from tokenizer import ErnieMTokenizerFast
 from utils import logger, get_bool_ids_greater_than, get_span, get_id_and_prob, cut_chinese_sent, dbc2sbc
@@ -15,9 +19,13 @@ class MindSporeInferBackend:
     def __init__(self,
                  model_path_prefix,
                  multilingual=False,
-                 use_fp16=False):
+                 use_fp16=False,
+                 use_graph=False,
+                 max_len=512):
         logger.info(">>> [MindSporeInferBackend] Creating Engine ...")
         self.multilingual = multilingual
+        self.use_graph = use_graph
+        self.max_len = max_len
         if multilingual:
             self.model = UIEM.from_pretrained(model_path_prefix)
         else:
@@ -31,7 +39,8 @@ class MindSporeInferBackend:
 
     def infer(self, input_dict):
         for input_name, input_value in input_dict.items():
-            input_value = mindspore.Tensor(input_value)
+            input_value = mindspore.Tensor(np.pad(input_value, ((0,0), (0, self.max_len - input_value.shape[1])), mode='constant'))
+            print(input_name, input_value.shape)
             input_dict[input_name] = input_value
 
         outputs = self.model(**input_dict)
@@ -232,14 +241,14 @@ class UIEPredictor(object):
                     start += (len(prompt) + 1)
                     end += (len(prompt) + 1)
                     result = {"text": prompt[start:end],
-                              "probability": prob[i]}
+                              "probability": float(prob[i])}
                     result_list.append(result)
                 else:
                     result = {
                         "text": text[start:end],
                         "start": start,
                         "end": end,
-                        "probability": prob[i]
+                        "probability": float(prob[i])
                     }
                     result_list.append(result)
             results.append(result_list)
@@ -428,7 +437,7 @@ class UIEPredictor(object):
                                             key=lambda x: x[1])
                     concat_results.append([{
                         'text': cls_res,
-                        'probability': cls_info[1] / cls_info[0]
+                        'probability': float(cls_info[1] / cls_info[0])
                     }])
                 else:
                     concat_results.append([])
